@@ -1,0 +1,819 @@
+﻿	linux 文件权限
+文件的属性 从左往右一次是
+ 文件的属性，文件数，所有者，拥有者，拥有该文件的用户的所有的组，文件代销，文件创建的时间，文件名
+ 一，文件属性有10位，第一位表示文件类型，剩下的9位都是代表文件的访问权限，每三个一组，从左往右，
+ 	第一组表示文件所有者对该文件的操作权限，
+	第二组表示与文件所有者同组的用户对该文件的操作权限，
+	第三组表示其他用户对该文件的操作权限，
+   man 2 chmod 可以查看函数chmod 的格式   int chmod(const char *pathname, mode_t mode);
+   int fchmod(int fd, mode_t mode); //二者传入参数的格式不同fd是文件的描述符
+   这里的mode是八进制的数字
+   #include <stdio.h
+   #include <stdlib.h>
+   #include <sys/types.h>
+   #include <sys/stat.h>
+    int main(int argc ,char **argv){
+   	int mode  ;//权限
+	int mode_u;//所有者的权限
+   	int mode_g;//所属组的权限
+   	int mode_o;//其他用户的权限
+	char *path;
+	//这里的argc表示在执行的时候传入的参数的个数 ,此处省略检查传入的参数
+	mode = atoi(argv[1]); //argv表示传入的参数的数组
+	//此处应该检查mode的大小，》777 || 《0 ，此处省略
+ 	mode_u = model /100;
+	mode_g = (mode - (mode_u*100))/10; //获取第二位
+	mode_o = model - mode_u*100 - modu_g*10;
+	mode = mode_u*8*8  +  mode_g*8 + mode_o; //八进制的转换
+	path = argv[2];
+	if( chmod(path ,mode) == -1){
+		perror("chmod error");
+		exit(1);
+	}
+  --------------以上完成了对文件权限管理的C代码   
+---------------------------------------
+	6 Linux 文件的输入输出
+一，open //系统调用用来打开或者创建一个文件，成功后返回一个文件描述符，错误为-1
+文件的创建，打开和关闭 (man 2 open //获取该函数原型)
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+int open(const char *pathname, int flags);
+int open(const char *pathname, int flags, mode_t mode);
+int creat(const char *pathname, mode_t mode);
+int openat(int dirfd, const char *pathname, int flags);
+int openat(int dirfd, const char *pathname, int flags, mode_t mode);
+同样的可以查看creat close (man 2 creat)
+ 创建一个文件
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <fcntl.h>
+ #include <errno.h>
+
+   int fd;
+   if( (fd = open("aa.txt",O_CREAT | O_EXCL , S_IRUSR |S_IWUSR)) ==-1){
+   	perror("open");
+	exit(1);
+   }else{
+   	printf("create file success!\n");
+   } //仅仅是只读只写的创建
+   close(fd);
+ #include <errno.h>//显示错误
+   printf("open :%s with errno:%d\n",strerror(errno),errno);
+二，read 文件的读,ssize_t read(int fd, void *buf, size_t count)
+	当有错误的时候返回-1,错误代码存入errno中
+	返回值表示读取到的字节数
+	if( (lseek(fd,0,SEEK_END)) == -1){ //将文件指针移动到文件结尾
+		//错误
+	}
+	if( (len = lseek(fd,0,SEEK_CUR)) == -1){ //获取当前的文件长度数
+		//错误
+	}
+	if( (lseek(fd ,0 ,SEEK_SET)) == -1){
+		//错误
+	}
+	char read_buf[64];
+	if( ret = read(fd,read_buff , len) <0){
+		//代表读取错误
+	}
+	for( int i=0;i<ret;i++){
+		printf("%c",read_buf[i]);
+	}
+    write 写//#include <unistd.h>
+	ssize_t write(int fd, const void *buf, size_t count);
+	返回的是写如的字节数，应该用返回的字节数和应该写如的个数判断
+     if(write(fd , buff_write , strlen(buff_write)) != strlen(buff_write)){
+     	//说明写入失败
+     }
+
+三，lseek系统调用用来移动文件的读写指针的位置
+	#include <sys/types.h>
+        #include <unistd.h>
+	off_t lseek(int fd, off_t offset, int whence);
+       成功时返回当前的读写位置，失败返回-1
+       lseek(fd , 0 SEEK_SET);//将文件指针移到文件开头
+       lseek(fd , 0 SEEK_END);//将文件指针移到文件末尾
+       lseek(fd , 0 SEEK_CUR);//获取当前指针的位置
+五，文件的移动和删除
+    1,	int rename(const char *oldpath, const char *newpath);//成功返回0
+	if(rename(argv[1] ,argv[2]) < 0){
+    2,删除文件remove(filename);//其内部是封装了unlink 和 rmdir //成功返回0，错误-1   
+六，目录的创建和删除 (man 2 mkdir)
+	1,	#include <sys/stat.h>
+		#include <sys/types.h>
+		int mkdir(const char *pathname, mode_t mode);
+	2, rmdir(filename); //只能删除指定的空目录,成功返回0，错误返回1
+	3,获取当前的目录
+		#include <unistd.h>
+   		char *getcwd(char *buf, size_t size);
+		char *getwd(char *buf);
+		char *get_current_dir_name(void);
+	4,更换工作目录
+		#include <unistd.h>
+		int chdir(const char *path);
+	      	int fchdir(int fd);
+	
+---------------------------------------
+	7 Linux 进程控制
+1,进程，概念，进程是一个动态的实体，是程序的一次执行过程，进程是动态的，程序是静态的，进程是运行中的程序，程序是一些保存在硬盘上的可执行的代码
+进程内部又划分很多线程，它是比进程更小的能独立运行的基本单位，他与该进程的其他线程共同拥有进程所有的资源，一个线程可以创建或撤销另外一个线程，同一个进程中的多个线程可以并发执行，每一个进程有唯一个非负数的ID标识。可以通过函数获取(unistd.h)
+ Linux 进程结构
+  代码段：用于存放可执行的代码
+  数据段：存放程序的全局变量，常亮，静态变量
+  堆栈段：存放动态分配的内存变量，堆栈中的栈用于函数调用，它存放着函数的参数,函数内部定义个变量
+ Linux 进程状态	
+ 	运行	R：正在运行或者运行队列中等待运行
+	可中断	S：进程正在等待某个时间完成，可以被信号或定时器唤醒
+	不可中断D：～～～，不可唤醒
+	僵死	Z：进程已经终止，但进程描述符依然存在，直到父进程调用wait()函数释放
+	停止	T：进程收到ISGSTOP,SIGSTP,SIGIN,SIGTOU信号后停止，或正在被跟踪
+    出现的一些后缀字符
+    	< 高优先级进程
+	N 低优先级进程
+	L 内存锁页，
+	s 该进程会话首进程
+	l 多线程进程
+	+ 进程位于前台进程
+ 2，进程的控制(创建进程，执行新程序，退出进程以及改变进程优先级等)
+ 	fork	: 用于创建进程	
+	exit	: 终止进程
+	exec	: 用于执行一个程序
+	wait	: 将父进程挂起，等待子进程终止
+	getpid	: 获取当前进程的进程ID
+	nice	: 改变进程的优先级
+ 3，进程内存映像；程序转为进程需要以下步骤
+ 	内核将程序读入内存，微程序分配内存空间
+	内核为该进程分配进程标识符PID和其他所需要资源
+	内核保存该进程的PID及相关的信息，把进程放到运行队列中等待执行，程序转化为京城后就可以死被操作系统的调用程序调度执行了
+	进程的内存映像是只内核在内存中如何存放可执行程序文件。（此处需要有图）
+2：1-1，创建进程（1，操作系统创建，2，父进程创建）
+	1，操作系统创建,平等关系，不存在资源继承关系
+	2，父进程创建 ，存在隶属关系，
+   fork是创建一个进程的唯一方法，返回两个值,一个是父进程调用fork函数后的返回值，该返回值是刚刚创建的资金此ID；另一个是子进程中的fork返回值，该值是0；返回两次的前提是创建成功，失败返回-1
+   pid_t pid;	pid = fork(); //创建一个进程
+   子进程会继承父进程的很多属性，主要包括用户ID，组ID，当前的工作目录，更目录，打开的文件,创建文件使用的屏蔽字，信号屏蔽字，上下文环境，共享的存储段，资源限制等，子进程独有属性
+   子进程有它自己唯一的进程ID
+   fork的返回值不同，父进程返回子进程的ID，子进程返回0
+   不同的父进程ID，子进程的父进程ID为创建它的父进程ID。
+   子进程共享父进程打开的文件描述符，但父进程对文件描述符的改变不会影响子进程中的文件描述符
+   子进程不继承父进程设置的文件锁
+   子进程不急陈父进程设置的警告
+   子进程的未决信号集被清空
+ 1-2，孤儿进程，子进程的父进程先于子进程结束，由init收养，成为init的子进程
+   vfork创建进程，和fork不同之处
+   	vfork保证子进程先运行，当它调用exit或exec后，父进程才可能被调用，如果在之前要依赖父进程的某个行为，就会导致死锁
+	vfork创建的子进程共享父进程的地址空间。子进程对地址空间的任何参数的修改同样为父进程所见
+ 2-2：创建守护进程 -在后台运行的，没有控制终端与之相连的进程
+   启动方式：在脚本/etc/rc.d中启动 ，作业规划进程crond启动，shell操作
+   创建的要点：
+   	让进程在后台执行
+	调用setsid创建一个新对话期，控制终端，登录会话和进程组都是从父进程继承下来的
+	禁止进程从新打开控制终端
+	关闭不必要的文件描述符
+	将当前目录更改为更目录
+	将文件创建时使用的屏蔽字设置为0
+	处理SIGCHLD信号
+ 
+
+
+
+---------------------------------------
+查看运行级别   runlevel
+N      3
+空的   一开始进入字符界面
+
+init 5 //进入图形界面    需要安装图形界面后才可以
+init 0 关机  ++ 
+init 6 重启  ++
+
+. 当前目录
+..上级目录
+/ 根目录
+修改默认级别 vim /etc/inittab 
+
+
+RPM安装在系统默认的目录
+源码包是手动指定位置
+
+独立服务
+  xinetd 守护进程  后台进程
+ 
+
+chkconfig --list //查看服务自启状态，可以看到所有rpm包安装的服务
+
+
+
+源码包 一般安装在。/usr/local 下
+
+    |~~ 启动  
+服务|
+    |~~自启动  
+
+
+
+端口 65536个
+
+
+10000以内是内留的
+
+
+tcp 三次握手
+
+netstat -tplnu
+
+
+
+//////////////////////////////////////////////////////////////////////////////////
+ /usr/local/php7/bin/	       			               /////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+ export PATH=$PATH:/usr/local/php7/bin  修改path
+
+
+防火墙
+/etc/init.d/iptables status //查看防火墙的状态
+/etc/init.d/iptables stop //暂时关闭防火墙：
+/sbin/chkconfig --level 2345 iptables off //禁止防火墙在系统启动时启动
+/etc/init.d/iptables restart //重启iptables:
+
+修改端口
+ 
+查看端口
+netstat -tpln 
+1) 重启后生效 
+开启： chkconfig iptables on 
+关闭： chkconfig iptables off 
+
+2) 即时生效，重启后失效 
+开启： service iptables start 
+关闭： service iptables stop 
+在开启了防火墙时，做如下设置，开启相关端口， 
+修改/etc/sysconfig/iptables 文件，添加以下内容： 
+-A RH-Firewall-1-INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT 
+-A RH-Firewall-1-INPUT -m state --state NEW -m tcp -p tcp --dport 22 -j ACCEPT
+
+【Centos升级到7之后，发现无法使用iptables控制Linuxs的端口，google之后发现Centos 7使用firewalld代替了原来的iptables。下面记录如何使用firewalld开放Linux端口： 】
+1、运行、停止、禁用firewalld
+
+启动：# systemctl start  firewalld
+
+查看状态：# systemctl status firewalld 或者 firewall-cmd --state
+
+停止：# systemctl disable firewalld
+
+禁用：# systemctl stop firewalld
+-----------------------------------------
+
+
+yum install lrzsz  //rzsz的安装
+
+kill -9 pid //强行关掉
+
+
+在命令模式下输入
+/word  这个是查找文件中“word”这个单词，是从文件上面到下面查找
+?word  这个是查找文件中“word”这个单词，是从文件下上面到面查找
+
+zip 命令： 
+# zip test.zip test.txt 
+它会将 test.txt 文件压缩为 test.zip ，当然也可以指定压缩包的目录，例如 /root/test.zip 
+
+# unzip test.zip 
+它会默认将文件解压到当前目录，如果要解压到指定目录，可以加上 -d 选项 
+# unzip test.zip -d /root/ 
+
+------------shell
+直接查看tar.gz压缩包里的内容可以使用：zcat xxx.tar.gz
+
+vim 编辑器 
+1，临时显示高亮  在输入行 syntax on/off
+永久性的显示高亮 在/etc/vimrc 中修改添加 syntax on,也可以在用户家目录下.vimrc下设置
+2，显示行号
+  set number   //set nonumber
+3，自动缩进
+  set autoindent 
+4，自动加入头文件
+autocmd BufNewFile *.sh,*.txt exec ":call SetTitle()"
+ 36 let $author_name="hyh"
+ 37 let $author_email="huyouheng19312@gmail.com"
+ 38 
+ 39 func SetTitle()
+ 40 call setline(1,"#######################################################################################################    ################")
+
+【Centos升级到7之后，发现无法使用iptables控制Linuxs的端口，google之后发现Centos 7使用firewalld代替了原来的iptables。下面记录如何使用firewalld开放Linux端口： 】
+1、运行、停止、禁用firewalld
+
+启动：# systemctl start  firewalld
+
+查看状态：# systemctl status firewalld 或者 firewall-cmd --state
+
+停止：# systemctl disable firewalld
+
+禁用：# systemctl stop firewalld
+-----------------------------------------
+
+
+yum install lrzsz  //rzsz的安装
+
+kill -9 pid //强行关掉
+
+
+在命令模式下输入
+/word  这个是查找文件中“word”这个单词，是从文件上面到下面查找
+?word  这个是查找文件中“word”这个单词，是从文件下上面到面查找
+
+zip 命令： 
+# zip test.zip test.txt 
+它会将 test.txt 文件压缩为 test.zip ，当然也可以指定压缩包的目录，例如 /root/test.zip 
+
+# unzip test.zip 
+它会默认将文件解压到当前目录，如果要解压到指定目录，可以加上 -d 选项 
+# unzip test.zip -d /root/ 
+
+------------shell
+直接查看tar.gz压缩包里的内容可以使用：zcat xxx.tar.gz
+
+vim 编辑器 
+1，临时显示高亮  在输入行 syntax on/off
+永久性的显示高亮 在/etc/vimrc 中修改添加 syntax on,也可以在用户家目录下.vimrc下设置
+2，显示行号
+  set number   //set nonumber
+3，自动缩进
+  set autoindent 
+4，自动加入头文件
+autocmd BufNewFile *.sh,*.txt exec ":call SetTitle()"
+ 36 let $author_name="hyh"
+ 37 let $author_email="huyouheng19312@gmail.com"
+ 38 
+ 39 func SetTitle()
+ 40 call setline(1,"#######################################################################################################    ################")
+ 41 call append(line("."),"\# File Name: ".expand("%"))
+ 42 call append(line(".")+1,"\# Author Name :".$author_name)
+ 43 call append(line(".")+2,"\# Author Email:".$author_email)
+ 44 call append(line(".")+3,"\# Create Time :".strftime("%c"))
+ 45 call append(line(".")+4,"\#============================================================================================    ==========================")
+ 46 call append(line(".")+5,"\#!bin/bash")
+ 47 call append(line(".")+6,"")
+ 48 endfunc
+
+
+shell颜色高亮
+echo -e 终端颜色
+echo -e "\e[1;30m jsdf \e[1;0m"
+            1表示开  0关闭
+
+------------
+关联数组
+ declare -A ssharray
+  9 restitem=$(tput sgr0)
+ 10 i=0
+ 11 numbers=""
+ 12 #for script_file in 'ls -I "main_montior.sh" ./'
+ 13 for script_file in `ls -I "monitor_man.sh" ./`
+ 14 do
+ 15  echo -e "\e[1;35m" "the cript: " ${i} "==>" ${restitem} ${script_file}
+ 16  ssharray[$i]=${script_file}
+ 17  numbers="${numbers} | ${i}"
+ 18  i=$((i+1))
+ 19 done
+ 20 
+ 21 while true
+ 22 do
+ 23  read -p "Please input a number ${numbers}:" execshell
+ 24  if [[ ! ${execshell} =~ ^[0-9]+ ]] ;then
+ 25    exit 0
+ 26  fi
+ 27  /bin/sh ${ssaray[$execshell]}
+ 28 done
+
+read -p "please input a number ${numbers} :" execshell
+
+-------------------
+Shell典型应用之应用日志分析
+
+系统日志{ 
+  /va/log/messages ->系统主日志文件
+  /var/log/secure   //认证，安全
+  /var/log/dmesg 和系统启动相关
+ }
+应用服务 {
+  access.log   mysqlid.log xferlog//FTP
+ }
+程序脚本{
+
+nginx 日志查看  check_http_log.sh
+ cat access.log | awk '{print $1}'
+ cat access.log | awk '{print $1}' | sort
+ cat access.log | awk '{print $1}' | sort|uniq -c |sort -rn |more  //获取ip及次数
+ 
+cat access.log |grep -ioE "HTTP\/1\.[1|0]\"[[:blank:]][0-9]{3}"  //获取到状态码
+ i是不区分大小写  o是精确输出  E 支持正则
+restitem=$(tput sgr0)
+  9 Logfile_path='/var/log/nginx/access.log'
+ 10 
+ 11 Check_http_status(){
+ 12   Http_Status_codes=(`cat $Logfile_path | grep -ioE "HTTP\/1\.[1|0]\"[[:blank:]][0-9]{3}"  | awk -F"[ ]+" '{
+ 13                         if($2>=100 && $2<200)
+ 14                                 {i++}
+ 15                         else if($2>=200&&$2<300)
+ 16                                 {j++}
+ 17                         else if($2>=300&&$2<400)
+ 18                                 {k++}
+ 19                         else if($2>=400&&$2<500)
+ 20                                 {n++}
+ 21                         else if($2>=500)
+ 22                                 {p++}
+ 23                         }END {
+ 24                           print i?i:0,j?j:0,k?k:0,n?n:0,p?p:0,i+j+k+n+p 
+ 25                         }'
+ 26                   `)
+ 27         echo -e '\E[33m' "The number of http status[100+] :" $restitem ${Http_Status_codes[0]}
+ 28         echo -e '\E[33m' "The number of http status[200+] :" $restitem ${Http_Status_codes[1]}
+ 29         echo -e '\E[33m' "The number of http status[300+] :" $restitem ${Http_Status_codes[2]}
+ 30         echo -e '\E[33m' "The number of http status[400+] :" $restitem ${Http_Status_codes[3]}
+ 31         echo -e '\E[33m' "The number of http status[500+] :" $restitem ${Http_Status_codes[4]}
+ 32         echo -e '\E[33m' "The number of http status total :" $restitem ${Http_Status_codes[5]}
+ 33 }
+
+ Check_http_code(){
+ 35   Http_code=(`
+ 36                 cat $Logfile_path | grep -ioE "HTTP\/1\.[1|0]\"[[:blank:]][0-9]{3}"  | awk -v total=0 -F "[ ]" '{
+ 37                 if($2!="")
+ 38                   {
+ 39                     {code[$2];total++}  
+ 40                   }else{exit}
+ 41                 }END{
+ 42                     print code[404]?code[404]:0,code[403]?code[403]:0,total
+ 43                 }'
+ 44            `)
+ 45        echo -e '\E[33m' "The number of http status[404] :" $restitem ${Http_code[0]}      
+ 46        echo -e '\E[33m' "The number of http status[403] :" $restitem ${Http_code[1]}
+ 47        echo -e '\E[33m' "The number of http status total :" $restitem ${Http_code[2]}
+ 48 }
+
+
+----------nginx 服务
+curl -m -5 -s -w %{http_code}
+ -m最大的传输时间 -s静音模式 -w
+Resettitem=$(tput sgr0)
+  9 nginxserver='http://139.129.230.219/nginxservice'
+ 10 Check_Nginx_server(){
+ 11 
+ 12  status_code=$(curl -m 5 -s -w %{http_code} ${nginxserver})
+ 13  if [ $status_code -eq 000 -o $status_code -ge 500 ]
+ 14   then
+ 15     echo -e "\E[35m  network not connection ${Resettitem}"
+ 16   else
+ 17     echo -e "\E[35m  network connection ok! ${Resettitem}"
+ 18  fi
+ 19 }
+ 20 Check_Nginx_server
+----------系统状态   system_monitor.sh
+uname -o //系统类型
+
+uname -r
+hostname
+内网ip hostname -i
+外网ip  curl -s http://ipecho.net/plain
+
+获取DNS
+ cat /etc/resolv.conf |grep -E "\<nameserver[ ]+" |awk '{print $NF}'
+  nf表示空格 获取最后一列
+
+网络是否连接
+ping -c 2 imooc.com   &>/dev/null && echo 'ok' || echo 'no'
+   -c 连接几次
+
+free -m //使用了的内存
+----------member
+swap 交换分区使用量
+
+system = Total -Free
+app = Total -(Free+Cached+Buffers)
+
+df -h //查看内存使用情况
+
+cd /proc  所有文件都是临时的
+cat meminfo 
+awk '/MemTotal/{total=$2}/MemFree/{free=$2}END{print total,free}' /proc/meminfo
+系统所用到的内存
+awk '/MemTotal/{total=$2}/MemFree/{free=$2}END{print (total-free)/1024}' /proc/meminfo
+应用所用到的内存
+awk '/MemTotal/{total=$2}/MemFree/{free=$2}/^Cached/{cached=$2}/Buffers/{buffers=$2}END{print (total-free-cached-buffers)/1024}' /proc/meminfo
+
+-------cpu负载 uptime命令可以 
+top -n 1读取一次
+top -d 多少频率一次   top命令很耗费资源
+
+优化内存
+sync 
+cat /proc/sys/vm/drop_caches 
+echo 3 > /proc/sys/vm/drop_caches 
+ cat /proc/sys/vm/drop_caches 
+ free -m 
+--------------------------------
+	缓存和缓冲的区别
+缓存cache是用来加速数据从硬盘中“读取”的，而缓冲buffer是用来加速数据“写入”硬盘的
+vmstat 几秒执行一次  执行几次    // 查看所有的信息 内存，cpu
+开机会自检 1，硬件 。2，内核自检
+dmesg | grep CPU
+怎么检查硬件状态
+
+ cat /proc/cpuinfo
+
+file /bin/ls  判断当前系统的位数
+lsb_release -a //查看系统的发行版
+
+lsof |more //查询系统所有进程调用的文件
+lsof/sbin/init //查询某个文件被哪个进程调用
+----------------------系统定时任务
+at一次性服务
+chkconfig --list | grep atd //检查是否安装
+atd httpd mysqld   后面的这个d表示是守护进程
+service nginx status      
+yum install at
+在系统/etc/at.deny (黑名单) 对root不起着作用   【at.allow>at.deny,如果都不存在，那么只有root可以使用】
+使用：
+at 时间
+例一，at now + 5 minutes  //5分钟以后执行
+at> /root/hello.sh  //ctrl + d 保存 ，按Ctrl + 删除键进行删除
+atq //查询存在的at任务
+at -c 2 //查看任务
+例二。
+at 02:00 2013-07-26
+at>/bin/sync
+at>/sbin/shutdown -r now
+
+atrm 号 删除指定的at任务     
+//在用的时候注意是否开启at
+date //查询时间
+sync //同步，内存中的数据网硬盘中转
+
+------cron循环执行任务
+安装 yum install crontabs
+service crond start/restart/stop/status
+/etc/cron.allow   //cron.deny
+用法
+crontab 选项
+-e   :编辑定时任务
+-l(不是一) 查询任务
+-r 删除所有任务
+
+crontab -e //进入vim编辑中
+*****执行的任务     //：：5个星号
+第一个星号代表：一小时当中的地几分钟 0-59
+第二个星号代表：一天当中的地几小时   0-23
+第三个星号代表：一个月当中的第几天   1-31
+第四个星号代表：一年当中的第几月     1-12
+第五个星号代表：一周当中的星期几     0-7（0和7都代表星期天）
+* 表示任意时间（在这里）比如第一个 * **** 表示每1分钟执行
+，表示不连续的时间，比如 0 8,12,16 ***  表示在每天8点0分，12点0分，16点0分都执行一次命令 
+- 表示连续的时间 比如 0 5 * * 1-6 代表在周一到周六凌晨5点0分执行命令
+*/n 表示每10分钟执行
+
+星号（*）：代表所有可能的值，例如month字段如果是星号，则表示在满足其它字段的制约条件后每月都执行该命令操作。
+
+逗号（,）：可以用逗号隔开的值指定一个列表范围，例如，“1,2,5,7,8,9”
+
+中杠（-）：可以用整数之间的中杠表示一个整数范围，例如“2-6”表示“2,3,4,5,6”
+
+正斜线（/）：可以用正斜线指定时间的间隔频率，例如“0-23/2”表示每两小时执行一次。同时正斜线可以和星号一起使用，例如*/10，如果用在minute字段，表示每十分钟执行一次。
+
+##2017年9月10月每天凌晨5点5分30秒执行
+crontab -l //查询任务(不是一)
+cro-r //删除全部 ，
+
+======================【系统】定时任务
+两种方法
+第一，把需要执行的脚本复制到/etc/cron{daily,weekli,monthly}目录的任意一个
+
+第二种是修改/etc/crontab配置文件
+建议使用第一种
+
+系统定时的缺点：不确定它什么时候执行，（要对比上一次的时间，还有0-45分钟的随机延时时间）
+
+===========================================
+压缩文件 .zip
+zip 压缩文件后的名称 源名称
+zip hello.log.zip hello.log
+
+压缩目录
+zip -r 压缩文件后的名称 源目录
+
+解压缩 unzip
+
+gzip 源名称 (源文件会消失)
+gzip -r 目录
+
+解压 gunzip 包名 / -r (目录)
+-------------------------------------
+ssh root@192.168.0.11
+-------------------------------------
+  【用户和用户组】
+/etc/group 文件存储当前系统中的所有用户组信息
+/etc/gshadow//用户组和密码
+
+添加一个组  groupadd （-g 888,可添加）sexy
+修改组名    groupmod -n 新的名称 原名称(sexy)
+修改组编号  groupmod -g 编号(668) 组名
+
+groupdel market//删除用户组
+
+添加用户到组  useradd -g market 用户名
+
+usermod -c 注释名称  用户名   ///添加注释
+usermod -l 新的名字 原来的名字 //修改名字
+        -d 指定个人文件夹路径
+切换用户组
+usermod -g 用户组 用户名
+删除账号 userdel 用户名 (不会删除个人的文件) -r 表示删除
+
+如果禁止用户登录 新建 touch /etc/nologin
+
+passwd -l 用户名 //锁定
+       -u        //解锁
+       -d         //删除密码  ，无密码登录
+
+passwd 用户名   //添加密码（也可修改密码）
+-----------------------------------
+  【正则表达式】
+
+？表示任意一个字符    ||  *表示任意多个字符
+[]表示一个字符
+ 
+通配符 ：用来匹配符合条件的文件名，【通配符是完全匹配】，ls,find ,cp不支持正则
+正则表达式用来在文件中匹配符合条件的字符串，grep ,awk,sed可以支持正则，【包含匹配】
+
+正则
+ ^ 行首   $行尾  ^$表示匹配空白行
+ []和通配符中的一致 [^a-z]表示取反，除了字母外的任意
+ \转义符
+
+grep -v 表示取反
+cut -f(几列) -d(标识符:) ：：注意默认分隔符是制表符 ，也就是tab键
+  grep "/bin/bash" /etc/passwd | grep -v "root" | cut -f 1 -d ":" //获取能登陆的用户
+
+
+
+--------------------------------awk命令
+awk '条件1{动作1}条件2{动作2}' 文件名
+\t 给列扩宽  \n换行
+{FS=":"} 表示是以:作为分隔符的
+'BEGIN{FS=":"}'  当然也有END
+-----------
+ vim如何删除文件中所有东西
+方法1:    按ggdG
+方法2:       :%d
+
+jobs 后台正在挂起的操作
+fg进入到前来
+
+--------------------
+锁定文件
+chattr +i 文件名
+
+lsattr 文件名 //查看文件的属性
+
+锁定 chattr +i /etc/passwd /etc/shawod /etc/group /etc/gshawod 
+然后可以将chattr 移动到某一个文件中 mv `which chattr` /home/hyh/chattr_copy
+
+
+对密码加密
+将 password --md5 加密后的密码   放在/etc/grup.conf中的hiddenmenu 和title之间
+------------------------
+禁止linux系统被ping
+ps -aux //查看所有进程
+strace -p pid //每个进程所执行的任务
+
+----------------
+【rpm安装.apm文件包】
+  shift+p 表示cpu排序显示
+  q退出
+3）杀死进程
+ 平滑启动 
+ kill -1 pid 
+      -9 强制终止
+ pkill -9 -t 终端号 //剔除某一个用户
+4）修改进程的优先级
+
+--------------
+w 查看当前用户的命令
+who 存在的用户
+------------------------
+rar-------------------------------------------------------------------------------------------------------------- 
+如果是以tarball形式安装安装，去rar网站下载相应版本的tarball。地址为http://www.rarlab.com/ 
+以3.8版本为例，如果是i386的平台,执行以下命令： 
+$wget http://www.rarlab.com/rar/rarlinux-3.8.0.tar.gz 
+
+rar软件不需要安装，直接解压到/usr/local下，以下操作需要有root权限。 
+
+#tar zxvf rarlinux-3.8.0.tar.gz -C /usr/local 
+
+此时，/usr/local/rar下就会有rar命令和unrar命令。可以在/usr/local/bin下创建连接 
+
+#ln -s /usr/local/rar/rar /usr/local/bin/rar 
+#ln -s /usr/local/rar/unrar /usr/local/bin/unrar 
+rar x 文件.rar
+
+wget http://www.rarsoft.com/rar/rarlinux-4.0.1.tar.gz 
+tar -zxvf rarlinux-4.0.1.tar.gz 
+cd rar 
+make 
+先记住两个常用命令吧： 
+rar x vpsyou.rar //解压 vpsyou.rar 到当前目录 
+rar vpsyou.rar ./vpsyou.com/ //将 vpsyou.com 目录打包为 vpsyou.rar 
+
+ls -lh //可查看文件的大小
+【】
+
+
+【进程之间的通信】
+1 ）在用户空间实现进程通信时不可能的，可以通过内核的空间对象
+  1.1）线程间通信：可以在用户空间实现，可以通过全局变量通信
+
+2 ）进程间的通信方式
+   1，管道通信 （无名管道{在文件系统中无文件节点} ，有名管道）
+   2，信号通信（信号的发送，接收，处理）
+   3，IPC通信：共享内存，消息队列和信号灯
+  以上6种为单机模式下的进程同通信（只有一个内核）
+  Socket通信（网络间的通信，两个内核）
+ 
+管道通信时由队列来实现的
+int fd[2];
+int ret;
+
+fd[1] 是写 fd[0]是读 ，固定模式
+
+pipe(fd);//创建一个管道;fd[]  成功是0 ，出错时-1
+write(fd[0],writebuf,sizeof(writebuf)); //向管道写
+read(fd[0],readbuf,128);
+
+-----------------------
+shutdown –h 10 ‘This server will shutdown after 10 mins’ 这个命令告诉大家，计算机将在10分钟后关
+机，并且会显示在登陆用户的当前屏幕中。Shutdown –h now 立马关机
+
+Shutdown –h 20:25 系统会在今天20:25关机
+Shutdown –h +10 十分钟后关机
+Shutdown –r now 系统立马重启
+Shutdown –r +10 系统十分钟后重启
+reboot 就是重启，等同于 shutdown –r now
+----------------------------【shell】
+#!/bin/bash
+string="abcd"
+echo ${#string} #输出 4
+ [数组]
+ a=(1 2 3 4 5);
+echo ${a[0]}
+echo ${#a[*]}//获取所有的个数
+Shell 注释 以"#"开头的行就是注释，会被解释器忽略。read 命令从标准输入中读取一行,并把输入行的每个字段的值指定给 shell 变量
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
