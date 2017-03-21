@@ -1,4 +1,4 @@
-﻿	linux 文件权限
+﻿	linux 文件权限 
 文件的属性 从左往右一次是
  文件的属性，文件数，所有者，拥有者，拥有该文件的用户的所有的组，文件代销，文件创建的时间，文件名
  一，文件属性有10位，第一位表示文件类型，剩下的9位都是代表文件的访问权限，每三个一组，从左往右，
@@ -175,9 +175,33 @@ int openat(int dirfd, const char *pathname, int flags, mode_t mode);
 	将当前目录更改为更目录
 	将文件创建时使用的屏蔽字设置为0
 	处理SIGCHLD信号
- 
+   进程的退出
+        main中执行return
+	调用exit
+	调用_exit
+	异常退出：调用about函数，进程收到某一个信号，而该信号使程序终止
+ 2-3:等待进程结束
+ 	如果父进程没有调用wait或waitpid函数，子进程就会进入僵死状态，调用的话会使子进程变为僵尸进程 #include <sys/types.h> #include <sys/wait.h>
+	pid_t wait(stat_val);返回值是终止子进程的PID，参数stat_val所指向的是子进程中exit的退出码
+	if(pid != 0){ //表示是父进程，当子进程退出后会回到父进程中来
+		int stat_val;
+		pid_t child_pid;
+		if(WIFEXITED(stat_val)){ 
+			//这里表示子进程退出成功，stat_val返回的是子进程的PID
+			WEXITSTATUS(stat_val) //这个来获取子进程返回的退出码
+		}else{
+			//这里表示退出失败
+		}
+		//WIFEXITED//表示若果子进程正常退出的话，该宏返回一个非零的值，也就是真
+	}else{//这里是子进程。可以在此执行任务
+		//这里执行完了后应该用exit返回退出码，也就是上面stat_val的值
+	}
 
-
+  3-1：进程的其他操作
+      1，获取当前进程ID
+      	getpid();
+      2，setuid和setgid
+      3，nice改变优先级
 
 ---------------------------------------
 查看运行级别   runlevel
