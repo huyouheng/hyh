@@ -202,6 +202,111 @@ int openat(int dirfd, const char *pathname, int flags, mode_t mode);
       	getpid();
       2，setuid和setgid
       3，nice改变优先级
+ 8线程
+线程对于进程的优点
+1, 在多进程情况下，每个进程都有自己独立的地址空间，而在多线程情况下,泳衣进程内的线程共享进程的地址空间，创建一个新的进程时就要为其耗时分配系统资源，而创建一个新的线程划分的时间要少得多
+2，在系统调度方面，由于进程的字空间独立而线程共享地址空间，线程间的切换速度要远远快过进程间的切换
+3，在通信机制方面，进程间的数据相互独立，彼此通信需要以专门的而痛心方式进行，通信时经过操作系统，而同意进程中的线程共享数据空间，线程间的通信更加方便和省时
+4，可以提高应用程序的响应速度。耗时的任务可以交给线程来做，从而不影响其他的操作
+5，提高多处理器的效率。
+ 虽然线程在进程中共享地址空间，打开的文件描述符等，也有自己的私有数据信息，
+ 	1，线程号（thread ID）唯一的线程号意义对应
+	2，寄存器（包括程序计数器和堆栈指针）
+	3，对阵
+	4，信号掩码
+	5，优先级
+	6，线程私有的存储空间
+ Linux系统支持OSIX多线程接口，称为pthread,编写多线程需要引入头文件pthread.h,链接时需要使用库libpthread.a
+2 创建线程
+   (1)	（子进程是通过拷贝父进程的地址空间来实现的，而线程域进程内的线程共享程序代码，一段代码可以同事被多个线程执行）
+	#include <pthread.h>
+	int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+   		void *(*start_routine) (void *), void *arg);
+      thread是一个指针，当线程创建成功时，返回创建的线程ID
+      attr 制定线程的属性，NULL表示使用默认属性
+      start_routine 一个函数指针，指定线程创建后需要调用的函数，也叫线程函数
+      arg 传递给线程函数的参数
+   该函数床架成功后会返回0，若不为0表示失败，创建的错误码EAGAIN表示系统限制创建新的线程例如线程创建过多，EINVAL表示传入的第二个参数非法，线程创建成功后会执行第三个参数所指向的函数，
+   创建线程有关函数
+    pthread_t thid;
+    if(pthread_create(&thid , NULL ,(void *)thread ,NULL) != 0){
+    	//不等于零表示创建线程失败
+    }
+    pthread_self();//获取本线程的线程ID
+ 函数调用一次 pthread_once的使用
+  最先初始化 pthread_once_t once = PTHREAD_ONCE_INIT;
+   在子线程要调用的函数中，如果还有函数要调用的话（只能调用一次情况,就可以使用pthread_once(&once ,run)）
+  (2)线程属性 创建线程有一个参数 pthread_attr_t *attr
+  (3)终止线程 
+  	：通过return 从线程函数返回
+	：调用函数pthread_exit();退出
+   两种情况需要注意
+     ：在主线程main中调用了exit退出主线程，则所有的线程将终止，
+     ：主线程中调用了pthread_exit函数，则仅仅是主线程消亡，其他线程依然存在，知道结束，进程才会结束
+   ‘临界资源使用完毕后需要及时的释放，需要使用时需要申请。在同一时间内，只能一个线程占有，比如对一个文件进行写，此时不需要其他的线程来操作‘
+   因此Linux系统提供了一对函数用于自动释放资源
+   #define pthread_cleanup_push(routine ,arg)
+    {
+   	struct
+		_pthread_cleanup_buffer buffer;
+		_pthread_cleanup_push(&buffer,(coutine),(arg));
+   #define pthread_cleanup_pop
+   	_pthread_cleanup_pop(&buffer,(exeute));
+    }
+    //此函数一定是成对出现的，且必须位于程序的同一代码中才能通过编译
+ 线程间的同步问题：一般情况下，进程中各个线程的运行是相互独立的，线程的种子斌不会相互通知，也不会影响其他线程，种植的下次所占用的资源不会随着线程的终止而归还系统，而是任然是线程所在的进程所持有，函数pthread_join()//等待一个线程的结束
+ pthread_t thid ;//这是一个线程,且是创建完毕后的
+ int status; //这个用来接受线程结束后的pthread_exit(0)的值，这里是0
+ pthread_join(thid , (void *)&status);
+ //在这里后会将主线程挂起，知道thid线程完成为止
+（4）私有数据 thread-specific Data TSD
+     私有数据采用的是一种一键多值的技术，一个键对应多个值，主要有4个函数
+       pthread_key_create: 从Linux的TSD池中分配意向，将其赋值给key，所有的线程都可访问
+       pthread_setspecific:
+       pthread_getspecific:
+       pthread_key_delete:
+      ：：需要注意个是线程数据的释放，需要在建释放之前完成！
+         pthread_key_t key; //定义成全局变量
+ 	 在主线程中创建key和线程
+	 pthread_key_create(key ,NULL);
+	 在每一个线程中为其key设定自己的值，
+	  int tsd = 100;
+	  pthread_setspecific(key ,(void *)&tsd); //这便完成了该线程唯一的值
+  (5) 线程同步(常用的有 互斥锁，条件变量，异步信号)
+     互斥锁：通哦过锁机制来实现线程建的同步，在同一时刻只能一个线程执行一个关键部分的代码。有5个函数
+     pthread_mutex_init:初始化一个互斥锁
+     pthread_mutex_destory:注销一个互斥锁
+     pthread_mutex_lock:加锁
+     pthread_mutex_unlock:解锁
+     pthread_mutex_trylock:测试加锁，不成功立即返回
+     首先初始化一个互斥锁
+      pthread_mutex_t mutex;
+      两种初始方式
+       pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER ;//直接用宏定义
+       pthread_mutex_init(&mutex , NULL); //在主线程中初始化
+          pthread_mutex_lock(&mutex);
+		//这里的代码将只会让一个线程来执行,实际上是保护临界区中被操作的数据，用于保护多线程或多进程分享的共享数据
+	  pthread_mutex_unlock(&mutex);
+       pthread_mutex_destroy(&mutex);//在主线程中一定要注销
+   条件变量：利用线程间的共享的全局变量进行同步的额一种机制。条件变量往往需要和互斥锁一起使用，互斥锁用于加锁，条件变量用于等待，有关函数如下
+   pthread_cond_init: //初始化条件变量
+   pthread_cond_wait: //基于条件变量阻塞，无条件等待
+   pthread_cond_signal: //杰出特定线程的阻塞，存在多个等待线程时按入队顺序激活其中的一个
+   pthread_cond_destroy:消除变量条件
+---------
+	9信号及信号处理
+1-11.信号的来源：
+	硬件：当用户在终端上按下某些键,将产生信号，硬件异常产生
+	软件：终端用kill向进程发送任意信号,进程调用kill或sigqueue函数发送信号
+1-2.信号的种类
+	kill -l //查看所有的信号种类，在signal.h中定义
+	,可靠信号与不可靠信号，信号的优先级
+1-2.进程对信号的处理
+	捕捉，忽略，按照系统默认方式处理
+2-1.信号的处理 (SIGKILL和SIGSTOP这两个信号不能被捕获)
+    ：signal函数,用来设置进程在将诶谁到信号时的动作
+    ：sigaction函数可以用来检查或设置进程在接受到信号时的动作 
+
 
 ---------------------------------------
 查看运行级别   runlevel
