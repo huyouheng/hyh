@@ -306,7 +306,31 @@ int openat(int dirfd, const char *pathname, int flags, mode_t mode);
 2-1.信号的处理 (SIGKILL和SIGSTOP这两个信号不能被捕获)
     ：signal函数,用来设置进程在将诶谁到信号时的动作
     ：sigaction函数可以用来检查或设置进程在接受到信号时的动作 
-
+-----------------
+【进程间的通信】
+1，管道 pipe,//管道只能有一个进程流向另外一个进程，一个读，一个写，只能用于具有亲缘关系的进程间通信
+fd[0] //只能用来读，fd[1] //只能用于写，这都是固定的
+int pipe(fd); 成功返回0，失败返回-1
+//此函数必须在fork之前调用，否则不会继承父进程的文件描述符，管道是半半双工的，一端写，一端读
+例如：在父进程中写，就要关闭fd[0]读端
+	close(fd[0]);
+	char *message = "hello,pipe!";
+	write(fd[1],message,strlen(message)+1);
+    在子进程中读，需要关闭fd[1]写端
+    	close(fd[0]);
+	read(fd[0],message,strlen(message));//fd,存放地址，读取的长度
+创建两个管道来实现全同工
+	case 0:
+		close(pipe1[1]);  //close pipe1 write,so pipe1 just read
+		close(pipe2[0]); //close pipe2 read , pipe2 just write
+		child_rw_pipe(pipe1[0] , pipe2[1]);
+		exit(0);
+	default:
+		close(pipe1[0]); //close pipe1 read , so pipe1 just write
+		close(pipe2[1]);//close pipe2 write ,so pipe2 just read
+		parent_rw_pipe(pipe2[0] , pipe1[1]);
+		wait(&stat_val);
+	exit(0);
 
 ---------------------------------------
 查看运行级别   runlevel
