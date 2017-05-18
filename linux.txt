@@ -418,8 +418,19 @@ netstat -tpln
 
 禁用：# systemctl stop firewalld
 -----------------------------------------
+linux ssh上传文件
+scp /home/test/item.txtroot@192.168.1.129:/etc/test
+2：将本地目录上传到远程服务器上：
+# scp -r /home/test/ root@192.168.1.129:/etc/test
+-r 参数表示递归复制（即复制该目录下面的文件和目录）
+3、将远程服务器上的文件复制到本机
+	scp remote@www.abc.com:/usr/local/sin.sh /home/test
+	remote 通过remote用户登录到远程服务器（也可以使用其他拥有同等权限的用户）
+	www.abc.com 远程服务器的域名（当然也可以使用该服务器ip地址）
+4、将远程服务器上的目录复制到本机
+scp -r  root@www.vpser.NET:/user/local/  /home/test/
 
-
+-----------------
 yum install lrzsz  //rzsz的安装
 
 kill -9 pid //强行关掉
@@ -431,6 +442,7 @@ kill -9 pid //强行关掉
 
 zip 命令： 
 # zip test.zip test.txt 
+zip -r test.zip test //目录压缩
 它会将 test.txt 文件压缩为 test.zip ，当然也可以指定压缩包的目录，例如 /root/test.zip 
 
 # unzip test.zip 
