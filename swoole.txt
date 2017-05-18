@@ -1,1 +1,477 @@
-/home/huyouheng/hu/things/order/swoole.txt
+﻿			swoole
+【服务端】
+ $server = new swoole_server('0.0.0.0',7758); //表示所有的ip 7758端口都可以
+ $server -> on('connect',function(swoole_server $ser,$fd,$from_id){});//连接
+ $server -> on('receive',function(swoole_server $serv,$fd,$from_id,$data){;//连接成功
+   $serv->send($fd,"来自服务器"); //$fd是客户端的标识
+   $serv->close($fd);//会强制断开客户端
+  });
+ $server -> on('close',function($server,$fd,$from_id){});//关闭时执行
+ $server -> start();
+ //服务器是被动回复消息，除非在一连接的时候发送
+
+ 1.1 swoole_server->on(string $event, mixed $callback);//有以上三个事件
+    第1个参数是回调的名称, 大小写不敏感，具体内容参考回调函数列表，事件名称字符串不要加on
+    第2个函数是回调的PHP函数，可以是函数名的字符串，类静态方法，对象方法数组，匿名函数。
+ 1.2 swoole_server->addListener(string $host, int $port, $type = SWOOLE_SOCK_TCP);
+     Swoole提供了swoole_server::addListener来增加监听的端口。业务代码中可以通过调用     swoole_server::connection_info来获取某个连接来自于哪个端口。
+     $serv->addlistener("127.0.0.1", 9502, SWOOLE_SOCK_TCP);
+     IPv4使用 127.0.0.1表示监听本机，0.0.0.0表示监听所有地址
+     IPv6使用::1表示监听本机，:: (0:0:0:0:0:0:0:0) 表示监听所有地址
+ 1.3 swoole_server->set(array $setting);
+   swoole_server::set只能在swoole_server::start前调用
+   $serv->set(array(
+    ‘max_conn’=>2000, //此参数用来设置Server最大允许维持多少个tcp连接。超过此数量后，新进入的连接将被拒绝。
+         (计算最小值(serv->worker_num + SwooleG.task_worker_num) * 2 + 32)
+    'reactor_num' => 2, //reactor thread num通过此参数来调节poll线程的数量，以充分利用多核 reactor_num和writer_num默认设置为CPU核数 
+    'worker_num' => 4,    //设置启动的worker进程数。
+    'max_request'=>0 //max_request只能用于同步阻塞、无状态的请求响应式服务器程序,纯异步的Server不应当设置max_request
+    'backlog' => 128,   //listen backlog
+    'max_request' => 50,
+    'dispatch_mode' => 1,
+    'task_worker_num=>
+        配置task进程的数量，配置此参数后将会启用task功能。所以swoole_server务必要注册onTask/onFinish2个事件回调函数。
+        如果没有注册，服务器程序将无法启动。
+        task进程是同步阻塞的，配置方式与worker同步模式一致。
+     'log_file'=>'' //开启守护进程模式后(daemonize => true)，标准输出将会被重定向到log_file。
+     'log_level'=>0//设置swoole_server错误日志打印的等级，范围是0-5。低于log_level设置的日志信息不会抛出。
+        0 =>DEBUG 1 =>TRACE 2 =>INFO 3 =>NOTICE 4 =>WARNING 5 =>ERROR
+    'heartbeat_check_interval'=> //启用心跳检测，此选项表示每隔多久轮循一次，单位为秒。如 heartbeat_check_interval => 60，
+        表示每60秒，遍历所有连接，如果该连接在60秒内，没有向服务器发送任何数据，此连接将被强制关闭。
+        swoole_server并不会主动向客户端发送心跳包，而是被动等待客户端发送心跳。服务器端的heartbeat_check仅仅是检测连接上一次发送数据的时间，
+        如果超过限制，将切断连接
+    'heartbeat_idle_time'=>600 //与heartbeat_check_interval配合使用。表示连接最大允许空闲的时间。
+            表示每60秒遍历一次，一个连接如果600秒内未向服务器发送任何数据，此连接将被强制关闭
+            启用heartbeat_idle_time后，服务器并不会主动向客户端发送数据包
+            如果只设置了heartbeat_idle_time未设置heartbeat_check_interval底层将不会创建心跳检测线程，PHP代码中可以调用heartbeat方法手工处理超时的连接
+    'daemonize'=>1 //   守护进程化。设置daemonize => 1时，程序将转入后台作为守护进程运行。长时间运行的服务器端程序必须启用此项。
+            如果不启用守护进程，当ssh终端退出后，程序将被终止运行。启用守护进程后，标准输入和输出会被重定向到 log_file
+            如果未设置log_file，将重定向到 /dev/null，所有打印屏幕的信息都会被丢弃
+    'open_eof_check'=>true //打开EOF检测，此选项将检测客户端连接发来的数据，当数据包结尾是指定的字符串时才会投递给Worker进程。否则会一直拼接数据包，
+                直到超过缓存区或者超时才会中止。当出错时swoole底层会认为是恶意连接，丢弃数据并强制关闭连接。
+                array(
+                    'open_eof_check' => true, //打开EOF检测
+                    'package_eof' => "\r\n", //设置EOF
+                    )
+    'user'=>'root' //设置worker/task子进程的所属用户。服务器如果需要监听1024以下的端口，必须有root权限。但程序运行在root用户下，代码中一旦有漏洞，
+                攻击者就可以以root的方式执行远程指令，风险很大。配置了user项之后，可以让主进程运行在root权限下，子进程运行在普通用户权限下。
+));
+ 1.4 swoole_server->addProcess(swoole_process $process);添加一个用户自定义的工作进程。
+     
+ 1.5 swoole_server->listen(string $host, int $port, int $type);
+      监听一个新的Server端口，此方法是addlistener的别名。
+ 1.6 swoole_server->start();
+      启动成功后会创建worker_num+2个进程。主进程+Manager进程+worker_num个Worker进程。
+      启用task_worker会增加相应数量的子进程
+      函数列表中start之前的方法仅可在start调用前使用，在start之后的方法仅可在start调用后        使用
+ 1.7 swoole_server->tick  tick定时器，可以自定义回调函数。此函数是swoole_timer_tick的别名
+   function onReceive($server, $fd, $from_id, $data) {
+    $server->tick(1000, function() use ($server, $fd) {
+        $server->send($fd, "hello world");
+    });
+  }
+ 1.8 swoole_server->clearTimer 清除tick/after定时器，此函数是swoole_timer_clear的别名。
+   $timer_id = $server->tick(1000, function ($id) {
+    $server->clearTimer($id);
+ });
+ 1.9 swoole_server->close(int $fd, bool $reset = false);关闭客户端连接，函数原型：
+  bool swoole_server->send(int $fd, string $data, int $reactorThreadId = 0);
+  $data，发送的数据。TCP协议最大不得超过2M，UDP协议不得超过64K
+  发送成功会返回true
+  发送失败会返回false，调用$server->getLastError()方法可以得到失败的错误码
+ 1.10 swoole_server->sendfile  $serv->sendfile($fd, __DIR__.'/test.jpg');
+  
+ 1.11 swoole_server->addProcess($pro);此函数通常用于创建一个特殊的工作进程，用于监控、上报或者其他特殊的任务
+   $pro = new swoole_process(function() use ($ser){
+        while(true){
+            $msg = $pro->read();
+            foreach($ser->connections as $conn){
+                   $ser->send($conn,$msg);
+            }
+        }
+    });
+  1.12 swoole_server->tick  tick定时器，可以自定义回调函数。此函数是swoole_timer_tick的别名。(间隔多久后重复的执行)
+    $ser->tick(1000,function($id) use ($ser,$fd,$data){ //id for clearTimer($id);
+            //todo 次中间的内容会在1秒后重复的执行
+       });
+    （worker进程结束运行后，所有定时器都会自动销毁 tick/after定时器不能在swoole_server->start之前使用）
+  1.13 swoole_server->after
+    在指定的时间后执行函数，需要swoole-1.7.7以上版本。
+   1.14 swoole_server->defer 延后执行一个PHP函数。Swoole底层会在 EventLoop 循环完成后执行此函数。此函数的目的是为了让一些PHP代码延后执行，程序优先处理IO事件。
+   1.14 swoole_server->clearTimer
+	清除tick/after定时器，此函数是swoole_timer_clear的别名。
+	使用示例：
+	$timer_id = $server->tick(1000, function ($id) {
+	    $server->clearTimer($id);
+	});
+    1.15 swoole_server->connection_info(int $fd, int $from_id, bool $ignore_close = false)函数用来获取连接的信息swoole_server->task 
+    1.16  swoole_server->stats | array swoole_server->stats();得到当前Server的活动TCP连接数，启动时间，accpet/close的总次数等信息。	
+    1.17 swoole_server->task  投递一个异步任务到task_worker池中。此函数会立即返回。worker进程可以继续处理新的请求。
+    	第一步  $ser->set({
+    		'task_worker_num'=> 8
+    	         });
+    	 第二步 bind::Task function and Finsh function 
+	 public function onTask($server ,$task_id,$from_id,$data){
+	                   $server->finish("ok!{$data}");
+	   
+	             }
+	              public function onFinish($server,$data){
+	                        echo "task finish {$data}!\n";
+	                 }
+此功能用于将慢速的任务异步地去执行，比如一个聊天室服务器，可以用它来进行发送广播。 当任务完成时，在task进程中调用$serv->finish("finish") 告诉worker进程此任务已完成。当然swoole_server->finish是可选的。
+task底层使用Unix Socket管道通信，是全内存的，没有IO消耗。单进程读写性能可达100万/s，不同的进程使用不同的管道通信，可以最大化利用多核。
+
+AsyncTask功能在1.6.4版本增加，默认不启动task功能，需要在手工设置task_worker_num来启动此功能 
+task_worker的数量在swoole_server::set参数中调整，如task_worker_num => 64，表示启动64个进程来接收异步任务 
+swoole_server_task和swoole_server_finish在版本swoole-1.7.16-stable发送$data的长度可以超过8K， 此参数受SW_BUFFER_SIZE宏控制 。超过8k的数据默认是用/tmp作为临时存储
+swoole_server->task/taskwait/finish 3个方法当传入的$data数据超过8K时会启用临时文件来保存。当临时文件内容超过 server->package_max_length 时底层会抛出一个警告。
+WARN: task package is too big.
+server->package_max_length 默认为2M
+	{当调用$ser->task('data')的时候,会执行到finish方法，返回的是task_id,
+	当用$ser->taskwait('data');的时候返回的是task中的finish数据}
+	taskwait与task方法作用相同，用于投递一个异步的任务到task进程池去执行。与task不同的是taskwait是阻塞等待的，直到任务完成或者超时返回。
+	$result为任务执行的结果，由$serv->finish函数发出。如果此任务超时，这里会返回false。
+	taskwait是阻塞接口，如果你的Server是全异步的请使用swoole_server::task和swoole_server::finish,不要使用taskwait 第3个参数可以制定要给投递给哪个task进程，传入ID即可，范围是0 - serv->task_worker_num $dst_worker_id在1.6.11+后可用，默认为随机投递 taskwait方法不能在task进程中调用
+	1.8.6版本增加了第三个参数，可以直接设置onFinish函数，如果任务设置了回调函数，Task返回结果时会直接执行制定的回调函数，不再执行Server的onFinish回调
+	$serv->task("taskcallback", -1, function (swoole_server $serv, $task_id, $data) {
+          echo "Task Callback: ";
+         var_dump($task_id, $data); //这个$data是TASK进程处理完成后的结果
+     });
+taskwait $result为任务执行的结果，由$serv->finish函数发出。如果此任务超时，这里会返回false。
+  1.18 swoole_server->taskWaitMulti
+  		$tasks[] = mt_rand(1000, 9999); //任务1
+		$tasks[] = mt_rand(1000, 9999); //任务2
+		$tasks[] = mt_rand(1000, 9999); //任务3
+		var_dump($tasks);
+
+		//等待所有Task结果返回，超时为10s
+		$results = $server->taskWaitMulti($tasks, 10.0);
+		var_dump($results);
+       返回的依然是task 的数据，没有经过finish
+       -----------------------------
+	    'db_uri' => 'mysql:host=127.0.0.1;dbname=test',
+	    'db_user' => 'root',
+	    'db_passwd' => 'root',
+       -----------------------------
+       1.19 heartbeat 检测服务器所有连接，并找出已经超过约定时间的连接。如果指定if_close_connection，则自动关闭超时的连接。未指定仅返回连接的fd数组。
+---------------------------------------------------------------------------------
+Server 属性列表
+    setting     //函数所设置的参数都会保存在该属性上 echo $server->setting['worker_num'];
+    master_pid  //返回当前服务器主进程的PID。 只能在onStart/onWorkerStart之后获取到
+    manager_pid //返回当前服务器管理进程的PID。 只能在onStart/onWorkerStart之后获取到
+    worker_id   //得到当前Worker进程的编号，包括Task进程。这个属性与onWorkerStart时的$worker_id是相同的。
+                Worker进程ID范围是[0, $serv->setting['worker_num']) [工作进程重启后worker_id的值是不变的]
+                task进程ID范围是[$serv->setting['worker_num'], $serv->setting['worker_num'] + $serv->setting['task_worker_num'])
+    worker_pid  //得到当前Worker进程的操作系统进程ID。与posix_getpid()的返回值相同。
+    taskworker  布尔类型 ,true表示当前的进程是Task工作进程,false表示当前的进程是Worker进程
+    connections注意$connections属性是一个迭代器对象，不是PHP数组，所以不能用var_dump或者数组下标来访问，
+        只能通过foreach进行遍历操作。
+    connections_info($fd,$from_id); //获取一个连接上的客户端信息
+---------------------------------------------------------------------------------------
+[swoole_server的3种运行模式介绍]
+一、Base模式
+	如果客户端连接之间不需要交互，可以使用BASE模式。如Memcache、Http服务器等。
+二、线程模式
+三、进程模式
+
+进程之间的变量是不可通用的，
+通用的方法：1，共享内存，共享内存不属于进程，在共享内存中分配de内存空间可以被任何进程访问，即使进程关闭，共享内存依然可以继续保留
+task底层使用Unix Socket管道通信，是全内存的，没有IO消耗。单进程读写性能可达100万/s，不同的进程使用不同的管道通信，可以最大化利用多核。
+ipcs -m  //查看分享的内存分片
+【Task进程】
+task进程和worker进程间通过Unix Sock管道通信（也可以通过消息队列通信）
+task传递数据的大小：数据小于8k:直接通过管道传递,大于8k，写入临时文件传递
+
+Task传递对象：可以通过序列化传递一个对象的拷贝；
+	      Task中对对象的改变不会反应到Worker进程中，
+	       数据库,网络连接对象不可传递
+Task的onFinish回掉
+       Task的onFinish回掉会发回掉用task方法的Worker进程
+Task用处
+
+【Timer使用】
+swoole_timer_tick(1000,function($timer_id){},'参数');
+swoole_timer_after(1000,function(){});
+
+【客户端】
+ $client  = new swoole_client(SWOOLE_SOCK_TCP,SWOOLE_SOCK_ASYNC);//异步连接
+ $client ->on('connect',function($cli){});//连接上 
+ $client ->on('error',function($cli){});//
+ $client ->on('close',function($cli){});//
+ $client ->on('receive',function($){});
+ $client ->connect('127.0.0.1',7758);
+ --------------------------------------------------------------------------------
+【process】进程管理模块
+ $process = new swoole_process([$this,'run'],false(1),true(2));
+ ：：1)重定向子进程的标准输入和输出。 启用此选项后，在进程内echo将不是打印屏幕，而是写入到管道。读取键盘输入将变为从管道中读取数据。 默认为阻塞读取
+ ：：2)是否创建管道，启用$redirect_stdin_stdout后，此选项将忽略用户参数，强制为true 如果子进程内没有进程间通信，可以设置为false
+ swoole_process::signal(SIGNAL.function(){ }); //设置异步信号监听.
+ swoole_process::wait(false); //回收结束运行的子进程。
+ 在异步信号回调中执行wait
+swoole_process::signal(SIGCHLD, function($sig) {
+  //必须为false，非阻塞模式
+  while($ret =  swoole_process::wait(false)) {
+      echo "PID={$ret['pid']}\n";
+  }
+});
+------------------------------
+   PHP 四种函数回调方式 
+匿名函数
+类静态方法
+函数
+对象方法
+--------------------------------
+                                                                  [客户端]
+swoole_client提供了tcp/udp socket的客户端的封装代码，使用时仅需 new swoole_client即可
+$client = new swoole_client(SWOOLE_SOCK_TCP,SWOOLE_SOCK_ASYNC); //异步非阻塞
+注册异步事件回调函数，调用on方法会使当前的socket变成非阻塞的。
+connect     receive     close     error   $client->connect('127.0.0.1', 9501, 0.5);
+2.1 connect
+        同步模式
+            connect方法会阻塞，直到连接成功并返回true。这时候就可以向服务器端发送数据或者收取数据了。
+            if ($cli->connect('127.0.0.1', 9501)) {
+                  $cli->send("data");
+            } else {
+                  echo "connect failed.";
+            }
+        异步模式
+          connect会立即返回true。但实际上连接并未建立。所以不能在connect后使用send。通过isConnected()判断也是false。当连接成功后，系统会自动回调onConnect。这时才可以使用send向服务器发送数据。    
+2.2 isConnected 返回swoole_client的连接状态  
+send发送数据到远程服务器，必须在建立连接后，才可向Server发送数据。函数原型：
+    int $swoole_client->send(string $data);   
+     同步客户端
+    发送的数据没有长度限制 ,   发送的数据太大Socket缓存区塞满，底层会阻塞等待可写
+    异步客户端 
+      发送数据长度收到socket_buffer_size限制
+      onConnect(swoole_client $cli)
+      onError(swoole_client $cli)
+      onReceive(swoole_client $cli)
+      onClose(swoole_client $cli)
+    -----------------------------------------
+     【Process】
+swoole_process提供了基于unixsock的进程间通信，使用很简单只需调用write/read或者push/pop即可
+swoole_process支持重定向标准输入和输出，在子进程内echo不会打印屏幕，而是写入管道，读键盘输入可以重定向为管道读取数据
+配合swoole_event模块，创建的PHP子进程可以异步的事件驱动模式
+swoole_process提供了exec接口，创建的进程可以执行其他程序，与原PHP父进程之间可以方便的通信
+
+-------------------------------------------
+  [AsyncIO  异步文件读写]
+  异步文件系统IO
+      Linux原生异步IO
+      线程池模式异步IO
+1,swoole_async_readfile   //异步读取文件内容，函数原型
+  swoole_async_readfile(__DIR__."/server.php", function($filename, $content) {
+       echo "$filename: $content";
+  });
+PS::swoole_async_readfile会将文件内容全部复制到内存，所以不能用于大文件的读取
+    如果要读取超大文件，请使用swoole_async_read函数
+    swoole_async_readfile最大可读取4M的文件，受限于SW_AIO_MAX_FILESIZE宏      
+2,swoole_async_writefile
+    异步写文件，调用此函数后会立即返回。当写入完成时会自动回调指定的callback函数。
+    swoole_async_writefile('test.log', $file_content, function($filename) {
+         echo "wirte ok.\n";
+  }, $flags = 0);    
+      参数4为写入的选项，可以使用FILE_APPEND表示追加到文件末尾
+3swoole_async_read //分段读取
+  异步读文件，使用此函数读取文件是非阻塞的，当读操作完成时会自动回调指定的函数。      
+  swoole_async_read(  __DIR__ . '/data.txt',  function ($filename, $content) {
+        echo "file: $filename\ncontent-length: " . strlen($content) . "\nContent: $content\n";
+        if (empty($content))
+        {
+            echo "file is end.\n";
+            return false;
+        }
+        else
+        {
+            return true;
+          }
+      },
+      8192
+  );$callback函数，可以通过return true/false，来控制是否继续读下一段内容。
+4,swoole_async_write
+  bool swoole_async_write(string $filename, string $content, int $offset = -1, mixed $callback = NULL);
+  当offset为-1时表示追加写入到文件的末尾
+5,swoole_async_dns_lookup将域名解析为IP地址。调用此函数是非阻塞的，调用会立即返回。将向下执行后面的代码。
+swoole_async_dns_lookup("www.baidu.com", function($host, $ip){
+    echo "{$host} : {$ip}\n";
+});  
+-----
+EventLoop
+除了异步Server和Client库之外，Swoole扩展还提供了直接操作底层epoll/kqueue事件循环的接口。可将其他扩展创建的socket，PHP代码中stream/socket扩展创建的socket等加入到Swoole的EventLoop中。
+--------
+异步毫秒定时器
+swoole_timer_tick   tick定时器会持续触发，直到调用swoole_timer_clear清除
+
+------------------
+异步MySQL客户端
+  $db = new swoole_mysql;
+  $server = array(
+    'host' => '127.0.0.1',
+    'user' => 'root',
+    'password' => '18829357321hyh',
+    'database' => 'cms',
+);
+  connect 异步连接到MySQL服务器
+  function swoole_mysql->connect(array $serverConfig, callable $callback);
+  回调函数
+      function onConnect(swoole_mysql $db, bool $result);
+      $db 为swoole_mysql对象,$result 连接是否成功，只有为true时才可以执行query查询
+swoole_mysql->on设置事件回调函数。目前仅支持onClose事件回调。
+    $db->on('Close', function($db){echo "MySQL connection is closed.\n";});
+swoole_mysql->query 执行SQL查询。          
+  function swoole_mysql->query($sql, callable $callback);
+    回调函数
+        function onSQLReady(swoole_mysqli $link, mixed $result);
+        TODO in connect ,don`t forget check $result  (===false)
+    swoole_mysql_query异步地执行一条SQL语言，需要依赖MySQLi和mysqlnd扩展。此函数是swoole底层提供的真异步函数
+异步Http/WebSocket客户端
+          Swoole-1.8.0版本增加了对异步Http/WebSocket客户端的支持。底层是用纯C编写，拥有超高的性能。
+---------------------------------------------------------------------
+            【Memory】
+Swoole提供了6个内存操作的模块，在多进程编程中可以帮助程序员实现一些特殊的需求。
+Memory下的模块可以安全的用于异步非阻塞程序中，不存在任何IO消耗
+所有模块均为多进程安全的，无需担心数据同步问题
+Memory相关模块对象为有限资源，不可大量创建
+     [table] //swoole_table一个基于共享内存和锁实现的超高性能，并发数据结构。用于解决多进程/多线程数据共享和同步加锁问题
+     swoole_table->__construct(int $size)$size参数指定表格的最大行数，必须为2的指数，如1024,8192,65536等
+       $table = new swoole_table(1024);
+       swoole_table->column //内存表增加一列
+        bool swoole_table->column(string $name, int $type, int $size = 0);
+            $type指定字段类型，支持3种类型，swoole_table::TYPE_INT, swoole_table::TYPE_FLOAT, 
+            $table->column("name",swoole_table::TYPE_STRING,64);
+        swoole_table->create  //创建内存表。
+        swoole_table->set //设置行的数据，swoole_table使用key-value的方式来访问数据。
+        swoole_table->create() //创建好表的结构后，执行create后创建表
+        $table->set('hello@qq.com', array('id' => 189, 'name' => 'rango3', 'num' => 3.1415));
+            $key，数据的key，相同的$key对应同一行数据，如果set同一个key，会覆盖上一次的数据
+            $value，必须是一个数组，必须与字段定义的$name完全相同
+
+---------------------------------------------------------------------
+【HttpServer】
+swoole_http_server继承自swoole_server，是一个完整的http服务器实现。swoole_http_server支持同步和异步2种模式
+无论是同步模式还是异步模式，swoole_http_server都可以维持大量TCP客户端连接。同步/异步仅仅体现在对请求的处理方式上。
+swoole_http_server->on
+注册事件回调函数，与swoole_server->on相同。swoole_http_server->on的不同之处是：
+            swoole_http_server->on不接受onConnect/onReceive回调设置
+            swoole_http_server->on 额外接受1种新的事件类型onRequest
+   $request，Http请求信息对象，包含了header/get/post/cookie等相关信息
+   $response，Http响应对象，支持cookie/header/status等Http操作 /$response/$request 对象传递给其他函数时，不要加&引用符号
+1，swoole_http_request//http请求对象，保存了Http客户端请求的相关信息，包括GET、POST、COOKIE、Header等。
+                  swoole_http_request->$header//Http请求的头部信息。类型为数组，所有key均为小写。
+                  swoole_http_request->$server//Http请求相关的服务器信息，相当于PHP的$_SERVER数组。
+                包含了Http请求的方法，URL路径，客户端IP等信息。
+                get         //Http请求的GET参数，相当于PHP中的$_GET，格式为数组。echo $request->get['hello'];
+                post     //POST与Header加起来的尺寸不得超过package_max_length的设置，否则会认为是恶意请求
+                                   POST参数的个数最大不超过128个,echo $request->post['hello'];
+                cookie//HTTP请求携带的COOKIE信息，与PHP的$_COOKIE相同，格式为数组。
+                files     //文件上传信息。类型为以form名称为key的二维数组。与PHP的$_FILES相同。
+                rawContent//获取原始的POST包体，用于非application/x-www-form-urlencoded格式的Http POST请求。
+          除了header,server,cookie外其他的都有可能是空值,使用的时候一定要判断isset
+2，swoole_http_response
+          header //设置HTTP响应的Header信息。swoole_http_response->header(string $key, string $value);
+                  header设置必须在end方法之前，$key必须完全符合Http的约定，每个单词首字母大写，不得包含中文，下划线或者其他特殊字符
+                  $value必须填写,$responser->header('Content-Type', 'image/jpeg');
+          status  //发送Http状态码。swoole_http_response->status(int $http_status_code);
+          gzip//启用Http GZIP压缩。压缩可以减小HTML内容的尺寸，有效节省网络带宽，提高响应时间。
+                      必须在write/end发送内容之前执行gzip，否则会抛出错误。swoole_http_response->gzip(int $level = 1);
+          sendfile //发送文件到浏览器。
+                      $filename 要发送的文件名称，文件不存在或没有访问权限sendfile会失败
+                      底层无法推断要发送文件的MIME格式因此需要应用代码指定Content-Type
+                      调用sendfile后会自定执行end，中途不得使用Http-Chunk
+                      sendfile不支持gzip压缩$response->header('Content-Type', 'image/jpeg');
+                                  $response->sendfile(__DIR__.$request->server['request_uri']);
+          end //发送Http响应体，并结束请求处理。                         
+                    end操作后将向客户端浏览器发送HTML内容，并销毁$request/$response对象
+                    如果开启了KeepAlive，连接将会保持，服务器会等待下一次请求
+                    未开启KeepAlive，服务器将会切断连接
+3，配置选项,Http\Server除了可以设置Server相关选项外，还可以设置一些特有的选项。
+        pload_tmp_dir,设置上传文件的临时目录。
+                $serv->set(array( /目录最大长度不得超过220字节
+                          'upload_tmp_dir' => '/data/uploadfiles/',
+                          "package_max_length"=>20000
+                ));
+         http_parse_post//设置POST消息解析开关，选项为true时自动将Content-Type为x-www-form-urlencoded的请求包体解析到POST
+                      数组。设置为false时将关闭POST解析。
+           $serv->set(array(
+                'http_parse_post' => false,
+            ));  
+  文件上传
+          function file($request){
+            if(!isset($request->files['file'])){
+              return "{'status':'failed!','code':'1'}";
+            }
+            $file = $request->files['file'];
+             $file_name = $file['name'];
+             $file_tem_path = $file['tmp_name'];
+             $upload_path  = __DIR__."/../upload/";
+             if(!file_exists($upload_path)){
+              mkdir($upload_path);
+             }
+             if(move_uploaded_file($file_tem_path,$upload_path.$file_name)){
+              return "{'status':'success','code':'0'}";
+             }else{
+              return "{'status':'failed!','code':'1'}";
+             }
+          }
+  路由
+  function onWorkerStart(){ //在worker进程中进行类的注册
+    echo "worker process start!\n";
+    swoole_set_process_name("hyh_worker_process");
+    var_dump(spl_autoload_register(function($class){
+      $baseClassPath = \str_replace('\\',DIRECTORY_SEPARATOR , $class) .'.php';
+      $classPath = __DIR__ .'/'.$baseClassPath;
+      if(is_file($classPath)){
+        require "{$classPath}";
+        return; //directory_separator
+      }
+    }));
+  }
+  在Request中对请求地址进行拆分
+  function onRequest($request,$response){
+     $path_info = explode('/',$request->server['path_info']);
+     if( isset($path_info[1]) && !empty($path_info[1])){
+      $controller = 'HTTP\Controllers\\'.$path_info[1].'Controller';
+     }else{
+      $controller = 'HTTP\Controllers\\IndexController';
+     }
+     if( isset($path_info[2])){ //method
+      $action = $path_info[2];
+     }else{
+      $action ='index';
+     }
+     $result = 'Controller not found!';
+     if(class_exists($controller)){
+      $class = new $controller;
+      $result = 'Action not found!';
+      if(method_exists($class,$action)){
+        $result = $class->$action($request);
+      }else{
+        $result = "<h1>method 404 NOT FOUND!</h1>";
+      }
+     }else{
+      $result = "<h1>Controller 404 NOT FOUND!</h1>";
+     }
+     $response->end($result);
+  }
+-------------------------------
+【WebSocket】
+        swoole_websocket_server 继承自 swoole_http_server
+        $server = new swoole_websocket_server('127.0.0.1',9501);
+        $server->on("open",function($ser,$request){ //当WebSocket客户端与服务器建立连接并完成握手后会回调此函数。
+          var_dump($request); //这里会有客户端发来的header和server
+        });
+        $server->on("message",function($ser,$frame){ //当服务器收到来自客户端的数据帧时会回调此函数。
+                                              //$frame 是swoole_websocket_frame对象，包含了客户端发来的数据帧信息
+                                            //   onMessage回调必须被设置，未设置服务器将无法启动
+          echo "receive clietn data ----\n";
+          var_dump($frame); //里面有data，frame->data
+          $ser->push($frame->fd,"hello!");
+        });
+        $server->on("close",function($ser,$fd){
+          echo "client {$fd }close\n";
+        });
+        $server->start();
+         ?>
+         $ser->push($farme->fd,"data");//向websocket客户端连接推送数据，长度最大不得超过2M。
+         这里回调函数中的$ser是swoole_server,因为websocket是基于httpServer的,而httpServer是基于swoole_server的，所以
+      同样的可以使用start,managerstart,workerstart等回调函数
